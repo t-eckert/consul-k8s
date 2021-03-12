@@ -58,7 +58,6 @@ func (r *EndpointsController) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				}
 			}
 
-
 			return ctrl.Result{}, nil
 		}
 	} else if err != nil {

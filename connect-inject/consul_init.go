@@ -6,7 +6,7 @@ import (
 
 // containerInit returns the init container spec for registering the Consul
 // service, setting up the Envoy bootstrap, etc.
-func (h *Handler) getConsulInitContainer(pod *corev1.Pod, k8sNamespace string) (corev1.Container, error) {
+func (h *Handler) getConsulInitContainer() (corev1.Container, error) {
 
 	// Create expected volume mounts
 	volMounts := []corev1.VolumeMount{
