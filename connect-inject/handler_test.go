@@ -619,7 +619,7 @@ func TestHandlerEnableMetrics(t *testing.T) {
 			require := require.New(t)
 			h := tt.Handler
 
-			actual, err := h.enableMetrics(tt.Pod(minimal()))
+			actual, err := h.enableMetrics(*tt.Pod(minimal()))
 
 			if tt.Err == "" {
 				require.Equal(tt.Expected, actual)
@@ -681,7 +681,7 @@ func TestHandlerEnableMetricsMerging(t *testing.T) {
 			require := require.New(t)
 			h := tt.Handler
 
-			actual, err := h.enableMetricsMerging(tt.Pod(minimal()))
+			actual, err := h.enableMetricsMerging(*tt.Pod(minimal()))
 
 			if tt.Err == "" {
 				require.Equal(tt.Expected, actual)
@@ -730,7 +730,7 @@ func TestHandlerServiceMetricsPort(t *testing.T) {
 			require := require.New(t)
 			h := Handler{}
 
-			actual, err := h.serviceMetricsPort(tt.Pod(minimal()))
+			actual, err := h.serviceMetricsPort(*tt.Pod(minimal()))
 
 			require.Equal(tt.Expected, actual)
 			require.NoError(err)
@@ -766,7 +766,7 @@ func TestHandlerServiceMetricsPath(t *testing.T) {
 			require := require.New(t)
 			h := Handler{}
 
-			actual := h.serviceMetricsPath(tt.Pod(minimal()))
+			actual := h.serviceMetricsPath(*tt.Pod(minimal()))
 
 			require.Equal(tt.Expected, actual)
 		})
@@ -808,7 +808,7 @@ func TestHandlerPrometheusScrapePath(t *testing.T) {
 			require := require.New(t)
 			h := tt.Handler
 
-			actual := h.prometheusScrapePath(tt.Pod(minimal()))
+			actual := h.prometheusScrapePath(*tt.Pod(minimal()))
 
 			require.Equal(tt.Expected, actual)
 		})
@@ -857,7 +857,7 @@ func TestHandlerPrometheusAnnotations(t *testing.T) {
 			require := require.New(t)
 			h := tt.Handler
 
-			actual, err := h.prometheusAnnotations(tt.Pod(minimal()))
+			actual, err := h.prometheusAnnotations(*tt.Pod(minimal()))
 
 			require.Equal(tt.Expected, actual)
 			require.NoError(err)
@@ -905,7 +905,7 @@ func TestHandlerShouldRunMergedMetricsServer(t *testing.T) {
 			require := require.New(t)
 			h := tt.Handler
 
-			actual, err := h.shouldRunMergedMetricsServer(tt.Pod(minimal()))
+			actual, err := h.shouldRunMergedMetricsServer(*tt.Pod(minimal()))
 
 			require.Equal(tt.Expected, actual)
 			require.NoError(err)
@@ -1014,7 +1014,7 @@ func TestHandlerDetermineAndValidatePort(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			require := require.New(t)
 
-			actual, err := determineAndValidatePort(tt.Pod(minimal()), tt.Annotation, tt.DefaultPort)
+			actual, err := determineAndValidatePort(*tt.Pod(minimal()), tt.Annotation, tt.DefaultPort)
 
 			if tt.Err == "" {
 				require.Equal(tt.Expected, actual)
@@ -1099,7 +1099,7 @@ func TestHandlerPortValue(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			require := require.New(t)
 
-			port, err := portValue(tt.Pod, tt.Value)
+			port, err := portValue(*tt.Pod, tt.Value)
 			if (tt.Err != "") != (err != nil) {
 				t.Fatalf("actual: %v, expected err: %v", err, tt.Err)
 			}

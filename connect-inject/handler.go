@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/go-hclog"
 	"gomodules.xyz/jsonpatch/v2"
-	"k8s.io/api/admission/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -221,13 +220,13 @@ type Handler struct {
 	decoder *admission.Decoder
 }
 
-// Handle is the http.HandlerFunc implementation that actually handles the
+// Handle is the admission.Handler implementation that actually handles the
 // webhook request for admission control. This should be registered or
-// served via an HTTP server.
+// served via the controller runtime manager.
 func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.Response {
-	// Decode the pod from the request
 	var pod corev1.Pod
 
+	// Decode the pod from the request
 	if err := h.decoder.Decode(req, &pod); err != nil {
 		h.Log.Error("Could not unmarshal request to pod", "err", err)
 		return admission.Errored(http.StatusBadRequest, err)
@@ -235,6 +234,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 
 	h.Log.Info("received pod", "pod", pod)
 
+	// Marshall the contents of the pod that was received.
 	origPodJson, err := json.Marshal(pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
@@ -269,11 +269,11 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	// Add the upstream services as environment variables for easy
 	// service discovery.
 	for _, container := range pod.Spec.InitContainers {
-		container.Env = append(container.Env, h.containerEnvVars(&pod)...)
+		container.Env = append(container.Env, h.containerEnvVars(pod)...)
 	}
 
 	for _, container := range pod.Spec.Containers {
-		container.Env = append(container.Env, h.containerEnvVars(&pod)...)
+		container.Env = append(container.Env, h.containerEnvVars(pod)...)
 	}
 
 	// TODO: rename both of these initcontainers appropriately
@@ -287,7 +287,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 
 	// Add the init container that registers the service and sets up
 	// the Envoy configuration.
-	container, err := h.containerInit(&pod, req.Namespace)
+	container, err := h.containerInit(pod, req.Namespace)
 	if err != nil {
 		h.Log.Error("Error configuring injection init container", "err", err, "Request Name", req.Name)
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("error configuring injection init container: %s", err))
@@ -319,7 +319,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	pod.Annotations[annotationStatus] = injected
 
 	// Add annotations for metrics
-	promAnnotations, err := h.prometheusAnnotations(&pod)
+	promAnnotations, err := h.prometheusAnnotations(pod)
 	if err != nil {
 		h.Log.Error("Error configuring prometheus annotations", "err", err, "Request Name", req.Name)
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("error configuring prometheus annotations: %s", err))
@@ -435,7 +435,7 @@ func (h *Handler) defaultAnnotations(pod *corev1.Pod) error {
 
 // enableMetrics returns the default value in the handler, or overrides that
 // with the annotation if provided.
-func (h *Handler) enableMetrics(pod *corev1.Pod) (bool, error) {
+func (h *Handler) enableMetrics(pod corev1.Pod) (bool, error) {
 	enabled := h.DefaultEnableMetrics
 	if raw, ok := pod.Annotations[annotationEnableMetrics]; ok && raw != "" {
 		enableMetrics, err := strconv.ParseBool(raw)
@@ -449,7 +449,7 @@ func (h *Handler) enableMetrics(pod *corev1.Pod) (bool, error) {
 
 // enableMetricsMerging returns the default value in the handler, or overrides
 // that with the annotation if provided.
-func (h *Handler) enableMetricsMerging(pod *corev1.Pod) (bool, error) {
+func (h *Handler) enableMetricsMerging(pod corev1.Pod) (bool, error) {
 	enabled := h.DefaultEnableMetricsMerging
 	if raw, ok := pod.Annotations[annotationEnableMetricsMerging]; ok && raw != "" {
 		enableMetricsMerging, err := strconv.ParseBool(raw)
@@ -463,19 +463,19 @@ func (h *Handler) enableMetricsMerging(pod *corev1.Pod) (bool, error) {
 
 // mergedMetricsPort returns the default value in the handler, or overrides
 // that with the annotation if provided.
-func (h *Handler) mergedMetricsPort(pod *corev1.Pod) (string, error) {
+func (h *Handler) mergedMetricsPort(pod corev1.Pod) (string, error) {
 	return determineAndValidatePort(pod, annotationMergedMetricsPort, h.DefaultMergedMetricsPort)
 }
 
 // prometheusScrapePort returns the default value in the handler, or overrides
 // that with the annotation if provided.
-func (h *Handler) prometheusScrapePort(pod *corev1.Pod) (string, error) {
+func (h *Handler) prometheusScrapePort(pod corev1.Pod) (string, error) {
 	return determineAndValidatePort(pod, annotationPrometheusScrapePort, h.DefaultPrometheusScrapePort)
 }
 
 // prometheusScrapePath returns the default value in the handler, or overrides
 // that with the annotation if provided.
-func (h *Handler) prometheusScrapePath(pod *corev1.Pod) string {
+func (h *Handler) prometheusScrapePath(pod corev1.Pod) string {
 	if raw, ok := pod.Annotations[annotationPrometheusScrapePath]; ok && raw != "" {
 		return raw
 	}
@@ -485,7 +485,7 @@ func (h *Handler) prometheusScrapePath(pod *corev1.Pod) string {
 
 // serviceMetricsPort returns the port used to register the service with Consul,
 // or overrides that with the annotation if provided.
-func (h *Handler) serviceMetricsPort(pod *corev1.Pod) (string, error) {
+func (h *Handler) serviceMetricsPort(pod corev1.Pod) (string, error) {
 	// The annotationPort is the port used to register the service with Consul.
 	// If that has been set, it'll be used as the port for getting service
 	// metrics as well, unless overridden by the service-metrics-port annotation.
@@ -502,7 +502,7 @@ func (h *Handler) serviceMetricsPort(pod *corev1.Pod) (string, error) {
 
 // serviceMetricsPath returns a default of /metrics, or overrides
 // that with the annotation if provided.
-func (h *Handler) serviceMetricsPath(pod *corev1.Pod) string {
+func (h *Handler) serviceMetricsPath(pod corev1.Pod) string {
 	if raw, ok := pod.Annotations[annotationServiceMetricsPath]; ok && raw != "" {
 		return raw
 	}
@@ -513,7 +513,7 @@ func (h *Handler) serviceMetricsPath(pod *corev1.Pod) string {
 // prometheusAnnotations returns the Prometheus scraping configuration
 // annotations. It returns a nil map if metrics are not enabled and annotations
 // should not be set.
-func (h *Handler) prometheusAnnotations(pod *corev1.Pod) (map[string]string, error) {
+func (h *Handler) prometheusAnnotations(pod corev1.Pod) (map[string]string, error) {
 	enableMetrics, err := h.enableMetrics(pod)
 	if err != nil {
 		return map[string]string{}, err
@@ -538,7 +538,7 @@ func (h *Handler) prometheusAnnotations(pod *corev1.Pod) (map[string]string, err
 // server. This is used to configure the consul sidecar command, and the init
 // container, so it can pass appropriate arguments to the consul connect envoy
 // command.
-func (h *Handler) shouldRunMergedMetricsServer(pod *corev1.Pod) (bool, error) {
+func (h *Handler) shouldRunMergedMetricsServer(pod corev1.Pod) (bool, error) {
 	enableMetrics, err := h.enableMetrics(pod)
 	if err != nil {
 		return false, err
@@ -565,7 +565,7 @@ func (h *Handler) shouldRunMergedMetricsServer(pod *corev1.Pod) (bool, error) {
 // determineAndValidatePort behaves as follows:
 // If the annotation exists, validate the port and return it.
 // If the annotation does not exist, return the default port.
-func determineAndValidatePort(pod *corev1.Pod, annotation string, defaultPort string) (string, error) {
+func determineAndValidatePort(pod corev1.Pod, annotation string, defaultPort string) (string, error) {
 	if raw, ok := pod.Annotations[annotation]; ok && raw != "" {
 		port, err := portValue(pod, raw)
 		if err != nil {
@@ -605,7 +605,7 @@ func (h *Handler) validatePod(pod corev1.Pod) error {
 	return nil
 }
 
-func portValue(pod *corev1.Pod, value string) (int32, error) {
+func portValue(pod corev1.Pod, value string) (int32, error) {
 	// First search for the named port
 	for _, c := range pod.Spec.Containers {
 		for _, p := range c.Ports {
@@ -620,15 +620,7 @@ func portValue(pod *corev1.Pod, value string) (int32, error) {
 	return int32(raw), err
 }
 
-func admissionError(err error) *v1beta1.AdmissionResponse {
-	return &v1beta1.AdmissionResponse{
-		Result: &metav1.Status{
-			Message: err.Error(),
-		},
-	}
-}
-
-func findServiceAccountVolumeMount(pod *corev1.Pod) (corev1.VolumeMount, error) {
+func findServiceAccountVolumeMount(pod corev1.Pod) (corev1.VolumeMount, error) {
 	// Find the volume mount that is mounted at the known
 	// service account token location
 	var volumeMount corev1.VolumeMount

@@ -95,7 +95,7 @@ func (r *EndpointsController) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					// and register that port for the host service.
 					var servicePort int
 					if raw, ok := pod.Annotations[annotationPort]; ok && raw != "" {
-						if port, _ := portValue(&pod, raw); port > 0 {
+						if port, _ := portValue(pod, raw); port > 0 {
 							servicePort = int(port)
 						}
 					}
@@ -128,7 +128,7 @@ func (r *EndpointsController) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 						proxyConfig.LocalServicePort = servicePort
 					}
 
-					proxyConfig.Upstreams = processUpstreams(&pod)
+					proxyConfig.Upstreams = processUpstreams(pod)
 
 					proxyService := &api.AgentServiceRegistration{
 						Kind:            api.ServiceKindConnectProxy,
@@ -178,7 +178,7 @@ func (r *EndpointsController) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func processUpstreams(pod *corev1.Pod) []api.Upstream {
+func processUpstreams(pod corev1.Pod) []api.Upstream {
 	var upstreams []api.Upstream
 	if raw, ok := pod.Annotations[annotationUpstreams]; ok && raw != "" {
 		for _, raw := range strings.Split(raw, ",") {
