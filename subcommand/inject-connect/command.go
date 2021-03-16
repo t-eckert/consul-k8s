@@ -367,7 +367,6 @@ func (c *Command) Run(args []string) int {
 	// Create a channel for all controllers' exits
 	ctrlExitCh := make(chan error)
 
-	// Start the endpoints controller
 	{
 		zapLogger := zap.New(zap.UseDevMode(true), zap.Level(zapcore.InfoLevel))
 		ctrl.SetLogger(zapLogger)
@@ -384,6 +383,7 @@ func (c *Command) Run(args []string) int {
 			return 1
 		}
 
+		// Start the endpoints controller.
 		if err = (&connectinject.EndpointsController{
 			ConsulClient: c.consulClient,
 			Client:       mgr.GetClient(),
@@ -394,8 +394,10 @@ func (c *Command) Run(args []string) int {
 			return 1
 		}
 
+		// Setup certs dir for the webhook TLS certificates.
 		mgr.GetWebhookServer().CertDir = c.flagCertDir
 
+		// Register the connect inject handler with the manager.
 		mgr.GetWebhookServer().Register("/mutate",
 			&webhook.Admission{Handler: &connectinject.Handler{
 				ConsulClient:                c.consulClient,

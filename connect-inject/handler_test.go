@@ -1508,7 +1508,7 @@ func TestShouldInject(t *testing.T) {
 				DenyK8sNamespacesSet:  tt.DenyK8sNamespacesSet,
 			}
 
-			injected, err := h.shouldInject(tt.Pod, tt.K8sNamespace)
+			injected, err := h.shouldInject(*tt.Pod, tt.K8sNamespace)
 
 			require.Equal(nil, err)
 			require.Equal(tt.Expected, injected)

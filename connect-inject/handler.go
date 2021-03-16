@@ -255,7 +255,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 
 	// Check if we should inject, for example we don't inject in the
 	// system namespaces.
-	if shouldInject, err := h.shouldInject(&pod, req.Namespace); err != nil {
+	if shouldInject, err := h.shouldInject(pod, req.Namespace); err != nil {
 		h.Log.Error("Error checking if should inject", "err", err, "Request Name", req.Name)
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("error checking if should inject: %s", err))
 	} else if !shouldInject {
@@ -295,7 +295,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	pod.Spec.InitContainers = append(pod.Spec.InitContainers, container)
 
 	// Add the Envoy and Consul sidecars.
-	esContainer, err := h.envoySidecar(&pod, req.Namespace)
+	esContainer, err := h.envoySidecar(pod, req.Namespace)
 	if err != nil {
 		h.Log.Error("Error configuring injection sidecar container", "err", err, "Request Name", req.Name)
 		return admission.Errored(http.StatusInternalServerError, fmt.Errorf("error configuring injection sidecar container: %s", err))
@@ -318,7 +318,7 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	// and do not need to be checked for being a nil value.
 	pod.Annotations[annotationStatus] = injected
 
-	// Add annotations for metrics
+	// Add annotations for metrics.
 	promAnnotations, err := h.prometheusAnnotations(pod)
 	if err != nil {
 		h.Log.Error("Error configuring prometheus annotations", "err", err, "Request Name", req.Name)
@@ -338,17 +338,19 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 		pod.Annotations[annotationConsulNamespace] = h.consulNamespace(req.Namespace)
 	}
 
+	// Marshall the pod into JSON after it has the desired envs, annotations, labels,
+	// sidecars and initContainers appended to it.
 	updatedPodJson, err := json.Marshal(pod)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
+	// Create a patches based on the Pod that was received by the handler
+	// and the desired Pod spec.
 	patches, err := jsonpatch.CreatePatch(origPodJson, updatedPodJson)
 	if err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-
-	h.Log.Info("finished mutating pod", "pod", pod)
 
 	// Check and potentially create Consul resources. This is done after
 	// all patches are created to guarantee no errors were encountered in
@@ -361,11 +363,12 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 		}
 	}
 
-	h.Log.Info("returning pod", "pod", pod)
+	// return a Patched response along with the patches we intend on applying to the
+	// Pod received by the handler.
 	return admission.Patched(fmt.Sprintf("valid %s request", pod.Kind), patches...)
 }
 
-func (h *Handler) shouldInject(pod *corev1.Pod, namespace string) (bool, error) {
+func (h *Handler) shouldInject(pod corev1.Pod, namespace string) (bool, error) {
 	// Don't inject in the Kubernetes system namespaces
 	if kubeSystemNamespaces.Contains(namespace) {
 		return false, nil
