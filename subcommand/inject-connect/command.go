@@ -41,7 +41,7 @@ import (
 type Command struct {
 	UI cli.Ui
 
-	flagListen               string
+	flagListen               int
 	flagCertDir              string // Directory with TLS certs for listening (PEM)
 	flagDefaultInject        bool   // True to inject by default
 	flagConsulImage          string // Docker image for Consul
@@ -122,7 +122,7 @@ func init() {
 
 func (c *Command) init() {
 	c.flagSet = flag.NewFlagSet("", flag.ContinueOnError)
-	c.flagSet.StringVar(&c.flagListen, "listen", ":8080", "Address to bind listener to.")
+	c.flagSet.IntVar(&c.flagListen, "listen", 8080, "Address to bind listener to.")
 	c.flagSet.BoolVar(&c.flagDefaultInject, "default-inject", true, "Inject by default.")
 	c.flagSet.StringVar(&c.flagCertDir, "tls-cert-dir", "",
 		"Directory with PEM-encoded TLS certificate and key to serve.")
@@ -375,7 +375,7 @@ func (c *Command) Run(args []string) int {
 		mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 			Scheme:             scheme,
 			LeaderElection:     false,
-			Port:               8080,
+			Port:               c.flagListen,
 			Logger:             zapLogger,
 			MetricsBindAddress: "0.0.0.0:9444",
 		})

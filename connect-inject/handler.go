@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -223,8 +224,6 @@ type Handler struct {
 // Handle is the http.HandlerFunc implementation that actually handles the
 // webhook request for admission control. This should be registered or
 // served via an HTTP server.
-// +kubebuilder:webhook:path=/mutate,mutating=true,failurePolicy=fail,groups="",resources=pods,verbs=create,versions=v1,name=mutate-pods.consul.hashicorp.com,webhookVersions=v1beta1,sideEffects=None
-
 func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.Response {
 	// Decode the pod from the request
 	var pod corev1.Pod
@@ -315,6 +314,8 @@ func (h *Handler) Handle(ctx context.Context, req admission.Request) admission.R
 	//	}
 	//}
 
+	// The annotations here have already been initialized be h.defaultAnnotations()
+	// and do not need to be checked for being a nil value.
 	pod.Annotations[annotationStatus] = injected
 
 	// Add annotations for metrics

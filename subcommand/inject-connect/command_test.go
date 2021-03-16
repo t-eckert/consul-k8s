@@ -218,25 +218,6 @@ func TestRun_ValidationConsulHTTPAddr(t *testing.T) {
 	}
 }
 
-// Test that with health checks enabled, if the listener fails to bind that
-// everything shuts down gracefully and the command exits.
-func TestRun_CommandFailsWithInvalidListener(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	ui := cli.NewMockUi()
-	cmd := Command{
-		UI:        ui,
-		clientset: k8sClient,
-	}
-	code := cmd.Run([]string{
-		"-consul-k8s-image", "hashicorp/consul-k8s", "-consul-image", "foo", "-envoy-image", "envoy:1.16.0",
-		"-enable-health-checks-controller=true",
-		"-http-addr=http://0.0.0.0:9999",
-		"-listen", "999999",
-	})
-	require.Equal(t, 1, code)
-	require.Contains(t, ui.ErrorWriter.String(), "Error listening: listen tcp: address 999999: missing port in address")
-}
-
 // Test that when healthchecks are enabled that SIGINT/SIGTERM exits the
 // command cleanly.
 func TestRun_CommandExitsCleanlyAfterSignal(t *testing.T) {
@@ -262,7 +243,7 @@ func testSignalHandling(sig os.Signal) func(*testing.T) {
 		exitChan := runCommandAsynchronously(&cmd, []string{
 			"-consul-k8s-image", "hashicorp/consul-k8s", "-consul-image", "foo", "-envoy-image", "envoy:1.16.0",
 			"-enable-health-checks-controller=true",
-			"-listen", fmt.Sprintf(":%d", ports[0]),
+			"-listen", fmt.Sprintf("%d", ports[0]),
 		})
 
 		// Send the signal
@@ -272,7 +253,7 @@ func testSignalHandling(sig os.Signal) func(*testing.T) {
 		select {
 		case exitCode := <-exitChan:
 			require.Equal(t, 0, exitCode, ui.ErrorWriter.String())
-		case <-time.After(time.Second * 1):
+		case <-time.After(time.Second * 2):
 			// Fail if the stopCh was not caught.
 			require.Fail(t, "timeout waiting for command to exit")
 		}
