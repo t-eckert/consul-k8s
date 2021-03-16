@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/hashicorp/consul-k8s/consul"
 	"github.com/hashicorp/consul/api"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -251,7 +252,7 @@ func getConsulClient(ip string) (*api.Client, error) {
 	localConfig := api.DefaultConfig()
 	localConfig.Address = newAddr
 
-	localClient, err := api.NewClient(localConfig)
+	localClient, err := consul.NewClient(localConfig)
 	if err != nil {
 		return nil, err
 	}

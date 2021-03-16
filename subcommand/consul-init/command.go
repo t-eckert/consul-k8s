@@ -3,12 +3,7 @@ package consulInit
 import (
 	"flag"
 	"fmt"
-	"github.com/hashicorp/consul-k8s/subcommand/flags"
-	"github.com/hashicorp/consul/api"
-	"github.com/mitchellh/cli"
 	"io/ioutil"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +11,13 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/hashicorp/consul-k8s/consul"
+	"github.com/hashicorp/consul-k8s/subcommand/flags"
+	"github.com/hashicorp/consul/api"
+	"github.com/mitchellh/cli"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 type Command struct {
@@ -99,7 +101,7 @@ func (c *Command) Run(args []string) int {
 
 	// create Consul API config object
 	localConfig := api.DefaultConfig()
-	c.consulClient, _ = api.NewClient(localConfig)
+	c.consulClient, _ = consul.NewClient(localConfig)
 
 	// Setup a health check.
 	mux := http.NewServeMux()
@@ -134,7 +136,6 @@ func (c *Command) Run(args []string) int {
 			}
 		}
 	}
-	return 1
 }
 
 func (c *Command) interrupt() {
