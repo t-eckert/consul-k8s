@@ -10,10 +10,16 @@ import (
 	"github.com/hashicorp/consul/api"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // todo: add docs
@@ -267,5 +273,82 @@ func (r *EndpointsController) Logger(name types.NamespacedName) logr.Logger {
 func (r *EndpointsController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Endpoints{}).
-		Complete(r)
+		Watches(
+			&source.Kind{Type: &corev1.Pod{}},
+			&handler.EnqueueRequestsFromMapFunc{ToRequests: handler.ToRequestsFunc(r.requestsForRunningAgentPods())},
+			builder.WithPredicates(predicate.NewPredicateFuncs(r.filterAgentPods())),
+		).Complete(r)
+}
+
+func (r *EndpointsController) filterAgentPods() func(meta metav1.Object, object runtime.Object) bool {
+	return func(meta metav1.Object, object runtime.Object) bool {
+		labels := meta.GetLabels()
+		app, ok := labels["app"]
+		if !ok {
+			return false
+		}
+		component, ok := labels["component"]
+		if !ok {
+			return false
+		}
+		// todo: do we want to filter on other labels?
+		if app == "consul" && component == "client" {
+			return true
+		}
+		return false
+	}
+}
+
+func (r *EndpointsController) requestsForRunningAgentPods() func(object handler.MapObject) []ctrl.Request {
+	return func(object handler.MapObject) []ctrl.Request {
+		var requests []reconcile.Request
+		var endpointsList corev1.EndpointsList
+		var consulClientPod corev1.Pod
+
+		r.Log.Info("received update for consulClientPod", "podName", object.Meta.GetName(), "consulClientPod", object.Object)
+		err := r.Client.Get(context.Background(), types.NamespacedName{Name: object.Meta.GetName(), Namespace: object.Meta.GetNamespace()}, &consulClientPod)
+		if k8serrors.IsNotFound(err) {
+			// Ignore if consulClientPod is not found
+			return []ctrl.Request{}
+		}
+		if err != nil {
+			r.Log.Error(err, "failed to get consulClientPod", "consulClientPod", consulClientPod.Name)
+			return []ctrl.Request{}
+		}
+		// We only care about agents that are already running.
+		if consulClientPod.Status.Phase != corev1.PodRunning {
+			r.Log.Info("ignoring consulClientPod because it's not running", "consulClientPod", consulClientPod.Name)
+			return []ctrl.Request{}
+		}
+		// We only care about pods that are ready because we can't talk to the consul client otherwise.
+		for _, cond := range consulClientPod.Status.Conditions {
+			if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionFalse {
+				// Ignore if consulClientPod is not ready
+				r.Log.Info("ignoring consulClientPod because it's not ready", "consulClientPod", consulClientPod.Name)
+				return []ctrl.Request{}
+			}
+		}
+
+		// Get the list of all endpoints.
+		err = r.Client.List(context.Background(), &endpointsList)
+		if err != nil {
+			r.Log.Error(err, "failed to list endpoints")
+			return []ctrl.Request{}
+		}
+
+		// Re-enqueue requests for endpoints from this agent
+		for _, ep := range endpointsList.Items {
+			for _, subset := range ep.Subsets {
+				allAddresses := subset.Addresses
+				allAddresses = append(allAddresses, subset.NotReadyAddresses...)
+				for _, address := range allAddresses {
+					// Only add requests for the address that is on the same node as the consul client pod.
+					if address.NodeName != nil && *address.NodeName == consulClientPod.Spec.NodeName {
+						requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{Name: ep.Name, Namespace: ep.Namespace}})
+					}
+				}
+			}
+		}
+		return requests
+	}
 }
