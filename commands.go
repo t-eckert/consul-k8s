@@ -11,6 +11,7 @@ import (
 	cmdDeleteCompletedJob "github.com/hashicorp/consul-k8s/subcommand/delete-completed-job"
 	cmdGetConsulClientCA "github.com/hashicorp/consul-k8s/subcommand/get-consul-client-ca"
 	cmdInjectConnect "github.com/hashicorp/consul-k8s/subcommand/inject-connect"
+	partitionsInit "github.com/hashicorp/consul-k8s/subcommand/partitions-init"
 	cmdServerACLInit "github.com/hashicorp/consul-k8s/subcommand/server-acl-init"
 	cmdServiceAddress "github.com/hashicorp/consul-k8s/subcommand/service-address"
 	cmdSyncCatalog "github.com/hashicorp/consul-k8s/subcommand/sync-catalog"
@@ -82,6 +83,10 @@ func init() {
 
 		"tls-init": func() (cli.Command, error) {
 			return &cmdTLSInit.Command{UI: ui}, nil
+		},
+
+		"partitions-init": func() (cli.Command, error) {
+			return &partitionsInit.Command{UI: ui}, nil
 		},
 	}
 }

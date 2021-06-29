@@ -313,6 +313,7 @@ func (c *Command) Run(args []string) int {
 	if cfg.TLSConfig.CAFile == "" && c.flagConsulCACert != "" {
 		cfg.TLSConfig.CAFile = c.flagConsulCACert
 	}
+
 	consulURLRaw := cfg.Address
 	// cfg.Address may or may not be prefixed with scheme.
 	if !strings.Contains(cfg.Address, "://") {
